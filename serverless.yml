@@ -1,0 +1,146 @@
+service: aws-bsk2-lopputyo
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: eu-north-1
+  environment:
+    user_pool_id: { Ref: UserPool } # cogniton user pool
+    client_id: { Ref: UserClient } # cogniton client id
+    ddb_table: ${self:service}-dogTable-${sls:stage}
+    BUCKET: dog-images-aws-lopputyo
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action: # Permissions for lambda functions to access Cognito
+            - cognito-idp:AdminInitiateAuth
+            - cognito-idp:AdminCreateUser
+            - cognito-idp:AdminSetUserPassword
+            - dynamodb:*
+            - s3:PutObject
+            - s3:PutObjectAcl
+          Resource: '*'
+  httpApi:
+    cors: true
+    authorizers:
+      PrivateAuthorizer: # Name of the Cognito authorizer
+        type: jwt
+        identitySource: $request.header.Authorization
+        issuerUrl:
+          Fn::Join:
+            - ''
+            - - 'https://cognito-idp.'
+              - '${opt:region, self:provider.region}'
+              - '.amazonaws.com/'
+              - Ref: UserPool
+        audience:
+          - Ref: UserClient
+  apiGateway:
+    binaryMediaTypes:
+      - 'multipart/form-data'
+
+functions:
+  loginUser: # login
+    handler: user/login.handler
+    events:
+      - httpApi:
+          path: /user/login
+          method: post
+
+  signupUser: # signup
+    handler: user/signup.handler
+    events:
+      - httpApi:
+          path: /user/signup
+          method: post
+
+  adddog:
+    handler: dog/adddog.handler
+    events:
+      - httpApi:
+          path: /dog/add
+          method: post
+          authorizer: PrivateAuthorizer
+
+  scandogs:
+    handler: dog/scandogs.handler
+    events:
+      - httpApi:
+          path: /dog/scan
+          method: get
+
+  getdog:
+    handler: dog/getdog.handler
+    events:
+      - httpApi:
+          path: /dog/get/{dogId}
+          method: get
+
+  deletedog:
+    handler: dog/deletedog.handler
+    events:
+      - httpApi:
+          path: /dog/delete/{dogId}
+          method: delete
+          authorizer: PrivateAuthorizer
+
+  updatedog:
+    handler: dog/updatedog.handler
+    events:
+      - httpApi:
+          path: /dog/update/{dogId}
+          method: patch
+          authorizer: PrivateAuthorizer
+
+  uploader:
+    handler: dog/uploadimg.handler
+    events:
+      - httpApi:
+          path: /dog/upload/{dogId}
+          method: post
+          authorizer: PrivateAuthorizer
+
+resources:
+  Resources:
+    UserPool: # cognito userpool
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: serverless-auth-pool
+        Schema:
+          - Name: email
+            Required: true
+            Mutable: true
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 6
+        AutoVerifiedAttributes: ['email'] # Email is validated
+
+    UserClient: # cognito userpool client
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: user-pool-ui
+        GenerateSecret: false
+        UserPoolId: { Ref: UserPool }
+        AccessTokenValidity: 5 # Token is valid for 5 hours
+        IdTokenValidity: 5
+        ExplicitAuthFlows:
+          - 'ADMIN_NO_SRP_AUTH' # Standard authorization with email and password
+
+    DogTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: dogId
+            AttributeType: S
+        BillingMode: PAY_PER_REQUEST
+        KeySchema:
+          - AttributeName: dogId
+            KeyType: HASH
+        TableName: ${self:service}-dogTable-${sls:stage}
+
+    DogImgBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: dog-images-aws-lopputyo
