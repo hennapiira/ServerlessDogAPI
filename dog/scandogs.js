@@ -9,7 +9,7 @@ module.exports.handler = async () => {
 
   try {
     const data = await doccli.send(new ScanCommand(params));
-    // palautetaan tietokannan itemit
+    // return the items from the database
     console.log(data.Items);
     return {
       statusCode: 201,
