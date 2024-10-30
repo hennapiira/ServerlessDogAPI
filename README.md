@@ -20,4 +20,4 @@ This project is a Dog Management System built on AWS, leveraging various AWS ser
 - **DynamoDB**: For storing dog information in a NoSQL database.
 - **Amazon S3**: For storing dog images.
 
-#### Note: You will need valid AWS credentials to access the required AWS services.
+### Note: You will need valid AWS credentials to access the required AWS services.
